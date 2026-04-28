@@ -31,6 +31,7 @@ jobs:
 
       - name: Test with coverage
         run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)
           pytest -q --cov=. --cov-report=xml --cov-report=term
 
       - name: Enforce coverage threshold (80%)
