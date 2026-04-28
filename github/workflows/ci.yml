@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint (flake8)
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+
+      - name: Test with coverage
+        run: |
+          pytest -q --cov=. --cov-report=xml --cov-report=term
+          
+      - name: Enforce coverage threshold (80%)
+        run: |
+          python - << 'PY'
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          # Cobertura-style coverage
+          lines_valid = int(root.get('lines-valid', '0'))
+          lines_covered = int(root.get('lines-covered', '0'))
+          pct = (lines_covered / lines_valid) * 100 if lines_valid else 0
+          print(f"Coverage: {pct:.2f}%")
+          assert pct >= 80, f"Coverage {pct:.2f}% < 80% threshold"
+          PY
