@@ -1,3 +1,5 @@
-pytest
-flake8
-pytest-cov
+flask>=3.0.0
+pytest>=7.0.0
+pytest-cov>=4.0.0
+flake8>=6.0.0
+pip-audit>=2.0.0
