@@ -1,39 +1,56 @@
-name: CI
+name: CI Task Manager
 
 on:
   push:
-    branches: [ "main", "test-failure" ]  # Menjaga agar branch apapun tetap jalan
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    
+    # 1. Implementasi Matrix Testing untuk Python 3.9 sampai 3.12 (Bobot Nilai Tambahan)
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-cov flake8
+          pip install pytest pytest-cov flake8 pip-audit flask
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Lint (flake8)
+      # 2. Quality Gate: Audit Pola Kode (Flake8)
+      - name: Lint with flake8
         run: |
+          # Menghentikan build jika ada error sintaks kritis atau undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Warning biasa tidak menghentikan build agar tetap realistis
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
 
-      - name: Test with coverage
+      # 3. Security Gate: Menemukan celah keamanan library (High/Critical)
+      - name: Security Scan (pip-audit)
+        run: |
+          pip-audit --desc on
+
+      # 4. Menjalankan Test Case Fungsional dengan PYTHONPATH lokal mesin runner
+      - name: Test with pytest and coverage
         run: |
           export PYTHONPATH=$PYTHONPATH:$(pwd)
           pytest -q --cov=. --cov-report=xml --cov-report=term
 
-      - name: Enforce coverage threshold
+      # 5. Quality Gate: Minimal Coverage Code harus 80%
+      - name: Enforce coverage threshold (80%)
         run: |
           python - << 'PY'
           import xml.etree.ElementTree as ET
@@ -44,7 +61,11 @@ jobs:
               lines_valid = int(root.get('lines-valid', '0'))
               lines_covered = int(root.get('lines-covered', '0'))
               pct = (lines_covered / lines_valid) * 100 if lines_valid else 0
-              print(f"Coverage: {pct:.2f}%")
-              if pct < 80: sys.exit(1)
-          except: sys.exit(0)
+              print(f"Code Coverage: {pct:.2f}%")
+              if pct < 80:
+                  print(f"Error: Coverage {pct:.2f}% di bawah batas minimum 80%!")
+                  sys.exit(1)
+          except Exception as e:
+              print(f"Gagal membaca file coverage.xml: {e}")
+              sys.exit(1)
           PY
